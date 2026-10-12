@@ -36,14 +36,21 @@ echo "migration_count=${#UPS[@]}"
 docker run -d   --name "$NAME"   -e POSTGRES_PASSWORD=hcp_ci_only   -e POSTGRES_DB=hcp_test   "$IMAGE" >/dev/null
 
 ready=false
-for _ in $(seq 1 45); do
-  if docker exec "$NAME" pg_isready -U postgres -d hcp_test >/dev/null 2>&1; then
-    ready=true
-    break
+stable_checks=0
+for _ in $(seq 1 60); do
+  if docker exec "$NAME" psql -U postgres -d hcp_test -Atqc 'SELECT 1;' >/dev/null 2>&1; then
+    stable_checks=$((stable_checks + 1))
+    if (( stable_checks >= 3 )); then
+      ready=true
+      break
+    fi
+  else
+    stable_checks=0
   fi
   sleep 1
 done
-[[ "$ready" == "true" ]] || { docker logs "$NAME" || true; echo "STOP: PostgreSQL did not become ready" >&2; exit 1; }
+[[ "$ready" == "true" ]] || { docker logs "$NAME" || true; echo "STOP: PostgreSQL did not become stably ready" >&2; exit 1; }
+echo "POSTGRES STABLE READINESS: PASS"
 
 apply_up() {
   for migration in "${UPS[@]}"; do
