@@ -7,8 +7,7 @@ cd "$ROOT"
 
 IMAGE="${HCP_TEST_POSTGRES_IMAGE:-postgres:16-alpine}"
 NAME="hcp-platform-db-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}"
-UP="migrations/platform/000001_platform_foundation.up.sql"
-DOWN="migrations/platform/000001_platform_foundation.down.sql"
+MIGRATIONS="$ROOT/migrations/platform"
 OUT="$ROOT/.ci-out"
 
 cleanup() {
@@ -17,13 +16,22 @@ cleanup() {
 }
 trap cleanup EXIT
 
-test -f "$UP"
-test -f "$DOWN"
 mkdir -p "$OUT"
+
+mapfile -t UPS < <(find "$MIGRATIONS" -maxdepth 1 -type f -name '*.up.sql' | sort)
+mapfile -t DOWNS < <(find "$MIGRATIONS" -maxdepth 1 -type f -name '*.down.sql' | sort -r)
+
+(("${#UPS[@]}" > 0)) || { echo "STOP: no platform up migrations found" >&2; exit 1; }
+[ "${#UPS[@]}" -eq "${#DOWNS[@]}" ] || { echo "STOP: up/down migration count mismatch" >&2; exit 1; }
+
+for up in "${UPS[@]}"; do
+  test -f "${up%.up.sql}.down.sql" || { echo "STOP: missing down migration for $up" >&2; exit 1; }
+done
 
 echo "=== PLATFORM DB CONTRACT ==="
 echo "image=$IMAGE"
 echo "container=$NAME"
+echo "migration_count=${#UPS[@]}"
 
 docker run -d   --name "$NAME"   -e POSTGRES_PASSWORD=hcp_ci_only   -e POSTGRES_DB=hcp_test   "$IMAGE" >/dev/null
 
@@ -35,18 +43,20 @@ for _ in $(seq 1 45); do
   fi
   sleep 1
 done
-if [[ "$ready" != "true" ]]; then
-  docker logs "$NAME" || true
-  echo "STOP: PostgreSQL did not become ready" >&2
-  exit 1
-fi
+[[ "$ready" == "true" ]] || { docker logs "$NAME" || true; echo "STOP: PostgreSQL did not become ready" >&2; exit 1; }
 
 apply_up() {
-  docker exec -i "$NAME" psql -U postgres -d hcp_test -v ON_ERROR_STOP=1 <"$UP"
+  for migration in "${UPS[@]}"; do
+    echo "apply_up=$(basename "$migration")"
+    docker exec -i "$NAME" psql -U postgres -d hcp_test -v ON_ERROR_STOP=1 <"$migration"
+  done
 }
 
 apply_down() {
-  docker exec -i "$NAME" psql -U postgres -d hcp_test -v ON_ERROR_STOP=1 <"$DOWN"
+  for migration in "${DOWNS[@]}"; do
+    echo "apply_down=$(basename "$migration")"
+    docker exec -i "$NAME" psql -U postgres -d hcp_test -v ON_ERROR_STOP=1 <"$migration"
+  done
 }
 
 assert_schema() {
@@ -56,20 +66,14 @@ DECLARE
   table_count integer;
   migration_count integer;
 BEGIN
-  SELECT count(*) INTO table_count
-  FROM information_schema.tables
-  WHERE table_schema='hcp';
-
+  SELECT count(*) INTO table_count FROM information_schema.tables WHERE table_schema='hcp';
   IF table_count <> 8 THEN
     RAISE EXCEPTION 'expected 8 hcp tables, found %', table_count;
   END IF;
 
-  SELECT count(*) INTO migration_count
-  FROM hcp.schema_migrations
-  WHERE version=1 AND name='platform_foundation';
-
-  IF migration_count <> 1 THEN
-    RAISE EXCEPTION 'platform migration receipt missing';
+  SELECT count(*) INTO migration_count FROM hcp.schema_migrations;
+  IF migration_count <> 2 THEN
+    RAISE EXCEPTION 'expected 2 migration receipts, found %', migration_count;
   END IF;
 END $$;
 
@@ -82,16 +86,31 @@ VALUES ('22222222-2222-2222-2222-222222222222', 'test-node', 'online', 'https://
 INSERT INTO hcp.node_capabilities(node_id, capability, version)
 VALUES ('22222222-2222-2222-2222-222222222222', 'container.inspect', '1');
 
-INSERT INTO hcp.jobs(
-  id, tenant_id, kind, status, resource_type, resource_id,
-  idempotency_key, requested_by, input
-) VALUES (
+INSERT INTO hcp.jobs(id, tenant_id, kind, status, resource_type, resource_id, idempotency_key, requested_by, input)
+VALUES (
   '33333333-3333-3333-3333-333333333333',
   '11111111-1111-1111-1111-111111111111',
-  'node.inspect', 'running', 'node',
+  'node.inspect', 'queued', 'node',
   '22222222-2222-2222-2222-222222222222',
   'ci-idempotency-key', 'ci-verifier', '{"read_only":true}'::jsonb
 );
+
+UPDATE hcp.jobs
+SET status='running'
+WHERE id='33333333-3333-3333-3333-333333333333';
+
+DO $$
+DECLARE
+  v bigint;
+  started timestamptz;
+BEGIN
+  SELECT version, started_at INTO v, started
+  FROM hcp.jobs
+  WHERE id='33333333-3333-3333-3333-333333333333';
+  IF v <> 2 OR started IS NULL THEN
+    RAISE EXCEPTION 'queued -> running transition contract failed';
+  END IF;
+END $$;
 
 INSERT INTO hcp.job_steps(job_id, ordinal, name, status)
 VALUES ('33333333-3333-3333-3333-333333333333', 1, 'preflight', 'succeeded');
@@ -106,46 +125,78 @@ VALUES (
   '33333333-3333-3333-3333-333333333333',
   now() + interval '5 minutes'
 );
+
+UPDATE hcp.jobs
+SET status='succeeded', output='{"verified":true}'::jsonb
+WHERE id='33333333-3333-3333-3333-333333333333';
+
+DO $$
+DECLARE
+  v bigint;
+  completed timestamptz;
+BEGIN
+  SELECT version, completed_at INTO v, completed
+  FROM hcp.jobs
+  WHERE id='33333333-3333-3333-3333-333333333333';
+  IF v <> 3 OR completed IS NULL THEN
+    RAISE EXCEPTION 'running -> succeeded transition contract failed';
+  END IF;
+END $$;
 SQL
 }
 
 echo
-echo "=== APPLY UP ==="
+echo "=== APPLY MIGRATION CHAIN ==="
 apply_up
 assert_schema
 echo "PLATFORM DB APPLY: PASS"
 
 echo
-echo "=== CONSTRAINT GATES ==="
+echo "=== CONSTRAINT / STATE GATES ==="
 if docker exec "$NAME" psql -U postgres -d hcp_test -v ON_ERROR_STOP=1   -c "INSERT INTO hcp.tenants(id,slug,display_name,status) VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','bad-tenant','Bad','deleted');"   >/dev/null 2>&1; then
   echo "STOP: invalid tenant status was accepted" >&2
   exit 1
 fi
 
-if docker exec "$NAME" psql -U postgres -d hcp_test -v ON_ERROR_STOP=1   -c "INSERT INTO hcp.jobs(id,tenant_id,kind,status,idempotency_key,requested_by,completed_at) VALUES ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','11111111-1111-1111-1111-111111111111','test','succeeded','ci-idempotency-key','ci',now());"   >/dev/null 2>&1; then
-  echo "STOP: duplicate idempotency key was accepted" >&2
+if docker exec "$NAME" psql -U postgres -d hcp_test -v ON_ERROR_STOP=1   -c "INSERT INTO hcp.jobs(id,tenant_id,kind,status,idempotency_key,requested_by) VALUES ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','11111111-1111-1111-1111-111111111111','test','queued','ci-idempotency-key','ci');"   >/dev/null 2>&1; then
+  echo "STOP: duplicate tenant idempotency key was accepted" >&2
   exit 1
 fi
+
+docker exec "$NAME" psql -U postgres -d hcp_test -v ON_ERROR_STOP=1   -c "INSERT INTO hcp.jobs(id,kind,status,idempotency_key,requested_by) VALUES ('cccccccc-cccc-cccc-cccc-cccccccccccc','system.inspect','queued','global-ci-key','ci');" >/dev/null
+
+if docker exec "$NAME" psql -U postgres -d hcp_test -v ON_ERROR_STOP=1   -c "INSERT INTO hcp.jobs(id,kind,status,idempotency_key,requested_by) VALUES ('dddddddd-dddd-dddd-dddd-dddddddddddd','system.inspect','queued','global-ci-key','ci');"   >/dev/null 2>&1; then
+  echo "STOP: duplicate global idempotency key was accepted" >&2
+  exit 1
+fi
+
+if docker exec "$NAME" psql -U postgres -d hcp_test -v ON_ERROR_STOP=1   -c "UPDATE hcp.jobs SET status='running' WHERE id='33333333-3333-3333-3333-333333333333';"   >/dev/null 2>&1; then
+  echo "STOP: terminal -> running transition was accepted" >&2
+  exit 1
+fi
+
 echo "PLATFORM DB CONSTRAINTS: PASS"
+echo "PLATFORM DB JOB STATE MACHINE: PASS"
 
 echo
-echo "=== DOWN / REAPPLY ==="
+echo "=== DOWN / CLEAN REAPPLY ==="
 apply_down
 schema_exists="$(docker exec "$NAME" psql -U postgres -d hcp_test -Atc "SELECT count(*) FROM information_schema.schemata WHERE schema_name='hcp';")"
-[[ "$schema_exists" == "0" ]] || { echo "STOP: hcp schema remains after down migration" >&2; exit 1; }
+[[ "$schema_exists" == "0" ]] || { echo "STOP: hcp schema remains after down migrations" >&2; exit 1; }
 echo "PLATFORM DB DOWN: PASS"
 
 apply_up
-docker exec "$NAME" psql -U postgres -d hcp_test -v ON_ERROR_STOP=1   -c "SELECT version,name FROM hcp.schema_migrations ORDER BY version;" >/dev/null
+migration_count="$(docker exec "$NAME" psql -U postgres -d hcp_test -Atc "SELECT count(*) FROM hcp.schema_migrations;")"
+[[ "$migration_count" == "2" ]] || { echo "STOP: reapply migration receipt count is $migration_count" >&2; exit 1; }
 echo "PLATFORM DB REAPPLY: PASS"
 
 commit="${GITHUB_SHA:-local}"
 run_id="${GITHUB_RUN_ID:-local}"
 image_id="$(docker image inspect "$IMAGE" --format '{{.Id}}')"
 
-python3 - "$OUT/platform-db-receipt.json" "$commit" "$run_id" "$IMAGE" "$image_id" <<'PY'
+python3 - "$OUT/platform-db-receipt.json" "$commit" "$run_id" "$IMAGE" "$image_id" "$migration_count" <<'PY'
 import datetime,json,pathlib,sys
-out,commit,run_id,image,image_id=sys.argv[1:]
+out,commit,run_id,image,image_id,migration_count=sys.argv[1:]
 payload={
   "schema_version":1,
   "verification":"platform-db-foundation",
@@ -153,13 +204,17 @@ payload={
   "run_id":run_id,
   "postgres_image":image,
   "postgres_image_id":image_id,
+  "migration_count":int(migration_count),
   "production_database_access":False,
   "checks":{
-    "migration_up":"PASS",
+    "migration_chain_up":"PASS",
     "schema_contract":"PASS",
     "constraints":"PASS",
-    "migration_down":"PASS",
-    "migration_reapply":"PASS"
+    "job_state_machine":"PASS",
+    "tenant_idempotency":"PASS",
+    "global_idempotency":"PASS",
+    "migration_chain_down":"PASS",
+    "migration_chain_reapply":"PASS"
   },
   "verified_at":datetime.datetime.now(datetime.timezone.utc).isoformat()
 }
