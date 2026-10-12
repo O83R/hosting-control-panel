@@ -55,9 +55,6 @@ if grep -Fq 'docker.sock' compose.yml; then
   echo "STOP: Docker socket mount/reference is forbidden in panel compose" >&2
   exit 1
 fi
-if grep -Eiq '^[[:space:]]*PANEL_COOKIE_SECURE:[[:space:]]*["''']?true' compose.yml; then
-  echo "INFO: secure cookie enabled"
-fi
 grep -Fq 'No production restore' web/index.html
 echo "SOURCE SAFETY CONTRACT: PASS"
 
