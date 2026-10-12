@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "phase/**"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hcp-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-and-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Go and source checks
+        run: bash scripts/ci.sh
+
+      - name: JavaScript syntax
+        run: |
+          node --check web/app.js
+          node --check web/login.js
+
+      - name: Compose validation
+        run: docker compose config >/dev/null
+
+      - name: Docker build
+        run: docker build --tag hosting-control-panel-ci:${{ github.sha }} .
