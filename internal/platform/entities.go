@@ -32,9 +32,9 @@ func (t Tenant) Validate() error {
 }
 
 type Node struct {
-	ID           string
-	Name         string
-	Status       NodeStatus
+	ID            string
+	Name          string
+	Status        NodeStatus
 	AgentEndpoint string
 	AgentVersion  string
 }
