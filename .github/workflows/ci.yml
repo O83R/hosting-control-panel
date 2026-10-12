@@ -19,6 +19,7 @@ concurrency:
 jobs:
   source-and-contract:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,3 +43,23 @@ jobs:
 
       - name: Docker build
         run: docker build --tag hosting-control-panel-ci:${{ github.sha }} .
+
+  independent-verifier:
+    needs: source-and-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Fresh checkout
+        uses: actions/checkout@v4
+
+      - name: Independent loopback staging verification
+        run: bash scripts/verify-staging.sh
+
+      - name: Upload verification receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hcp-verifier-receipt-${{ github.sha }}
+          path: .ci-out/verifier-receipt.json
+          if-no-files-found: warn
+          retention-days: 14
