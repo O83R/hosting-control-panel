@@ -38,6 +38,7 @@ cat >"$SNAPSHOT" <<'JSON'
   "projects": []
 }
 JSON
+chmod 0644 "$SNAPSHOT"
 
 echo "=== INDEPENDENT VERIFIER ==="
 echo "image=$IMAGE"
@@ -51,6 +52,15 @@ echo "DOCKER BUILD: PASS"
 
 docker volume create "$AUDIT_VOL" >/dev/null
 docker volume create "$ACTIONS_VOL" >/dev/null
+
+# Named Docker volumes are root-owned when first created. The production image
+# runs as uid 10001, so initialize only these ephemeral CI volumes explicitly.
+for vol in "$AUDIT_VOL" "$ACTIONS_VOL"; do
+  docker run --rm --user 0 --entrypoint /bin/sh \
+    -v "$vol:/target" "$IMAGE" \
+    -c 'chown -R 10001:10001 /target && chmod 0750 /target'
+done
+echo "EPHEMERAL VOLUME OWNERSHIP: PASS"
 
 echo
 echo "=== EPHEMERAL LOOPBACK STAGING ==="
