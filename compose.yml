@@ -1,0 +1,47 @@
+name: hosting-control-panel-dev
+
+volumes:
+  panel_audit_data:
+    name: hosting-control-panel-audit
+  panel_actions_data:
+    name: hosting-control-panel-actions
+
+services:
+  panel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hosting-control-panel-dev:v0.20.1
+    restart: unless-stopped
+    environment:
+      HOST_SNAPSHOT: /data/host-snapshot.json
+      AUDIT_DB: /var/lib/panel/audit.sqlite
+      AUTH_DB: /var/lib/panel/auth.sqlite
+      ACTIONS_ROOT: /var/lib/actions
+      PANEL_COOKIE_SECURE: "false"
+    ports:
+      - "127.0.0.1:18100:8080"
+    volumes:
+      - /srv/shared/hosting-panel-readonly:/data:ro
+      - panel_audit_data:/var/lib/panel
+      - panel_actions_data:/var/lib/actions
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.50
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD","wget","-qO-","http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 5s

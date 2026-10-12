@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>لوحة إدارة الاستضافة</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div>
+    <div class="eyebrow">HOSTING CONTROL PANEL</div>
+    <h1>لوحة إدارة الاستضافة</h1>
+    <p id="generated">جارٍ قراءة الحالة...</p>
+  </div>
+  <div class="badges"><span class="badge" id="currentUser">...</span><button id="logoutBtn">خروج</button>
+    <span class="badge safe-ops">SAFE OPERATIONS</span>
+    <span class="badge">v0.20.1</span><span class="badge" id="contractBadge">schema 5</span>
+  </div>
+</header>
+
+<main>
+  <section id="alert" class="alert hidden"></section>
+  <section id="diagnostics" class="diagnostics hidden"></section>
+
+  <section class="metrics">
+    <article class="metric"><span>الخادم</span><strong id="hostStatus">...</strong><small id="hostname">...</small></article>
+    <article class="metric"><span>CPU</span><strong id="cpu">...</strong><small>الاستخدام الحالي</small></article>
+    <article class="metric"><span>RAM</span><strong id="ram">...</strong><small>من الذاكرة</small></article>
+    <article class="metric"><span>Disk</span><strong id="disk">...</strong><small id="diskFree">...</small></article>
+    <article class="metric"><span>Load</span><strong id="load">...</strong><small>1 / 5 / 15 دقيقة</small></article>
+    <article class="metric"><span>Uptime</span><strong id="uptime">...</strong><small>منذ آخر إقلاع</small></article>
+  </section>
+
+  <section class="section-head">
+    <div><div class="eyebrow">PROJECTS</div><h2>المشاريع</h2></div>
+    <button id="refresh">تحديث الآن</button>
+  </section>
+  <section id="projects" class="projects"></section>
+
+
+  
+  <div id="agentArea">
+    <section class="section-head">
+      <div><div class="eyebrow">CONTROL PLANE</div><h2>وكيل العمليات المقيد</h2></div>
+    </section>
+    <section class="box">
+      <div class="row">
+        <span>قناة التنفيذ الآمنة · Panel v0.20.1 · Agent v0.16 · Project Backup متاح للمدير العام بتأكيد صريح</span>
+        <div><button id="agentPingBtn">اختبار الاتصال</button> <button id="backupNowBtn">نسخة حالة اللوحة الآن</button></div>
+      </div>
+      <div id="agentPingResult" class="muted">مسموح: agent.ping و backup.now و project.backup · لا توجد أي عملية Production Restore</div><div id="backupNowResult" class="muted">لا تشمل هذه النسخة قواعد بيانات مشاريع التطبيقات.</div>
+      <div class="section-head"><div><div class="eyebrow">BACKUP HISTORY</div><h3>سجل النسخ الاحتياطية</h3></div><button id="refreshBackupHistoryBtn">تحديث</button></div>
+      <div id="backupHistory" class="box">جاري تحميل السجل...</div>
+      <div class="section-head"><div><div class="eyebrow">PROJECT BACKUP VERIFICATION</div><h3>حالة التحقق والاستعادة للنسخ</h3></div><button id="refreshProjectBackupVerificationBtn">تحديث</button></div>
+      <div id="projectBackupVerification" class="box">جاري تحميل حالة التحقق...</div>
+      <div class="section-head"><div><div class="eyebrow">PROJECT BACKUP OPERATIONS</div><h3>نسخ قواعد بيانات المشاريع</h3></div><button id="refreshProjectBackupOperationsBtn">تحديث</button></div>
+      <div id="projectBackupOperations" class="box">جاري تحميل حالة المشاريع...</div>
+      <div id="projectBackupActionResult" class="action-result muted">لا يتم تنفيذ أي نسخة تلقائيًا. كل عملية تتطلب تأكيد اسم المشروع.</div>
+      <div class="technical-sections">
+        <details class="tech-details">
+          <summary><span><span class="eyebrow">PROJECT BACKUP ADAPTERS</span><strong>جاهزية نسخ قواعد بيانات المشاريع</strong></span><span class="summary-hint">تفاصيل تقنية</span></summary>
+          <div class="details-toolbar"><button id="refreshBackupAdaptersBtn">تحديث</button></div>
+          <div id="backupAdapters" class="box">جاري فحص الجاهزية...</div>
+        </details>
+        <details class="tech-details">
+          <summary><span><span class="eyebrow">BACKUP PREFLIGHT</span><strong>أدوات النسخ والاستعادة</strong></span><span class="summary-hint">تفاصيل تقنية</span></summary>
+          <div class="details-toolbar"><button id="refreshBackupPreflightBtn">تحديث</button></div>
+          <div id="backupPreflight" class="box">جاري فحص الأدوات...</div>
+        </details>
+        <details class="tech-details">
+          <summary><span><span class="eyebrow">BACKUP TARGET CONTRACT</span><strong>عقد هدف النسخ</strong></span><span class="summary-hint">تفاصيل تقنية</span></summary>
+          <div class="details-toolbar"><button id="refreshBackupContractBtn">تحديث</button></div>
+          <div id="backupContract" class="box">جاري فحص عقد النسخ...</div>
+        </details>
+      </div>
+
+
+
+
+    </section>
+  </div>
+
+<div id="auditArea"><section class="section-head"><div><div class="eyebrow">AUDIT</div><h2>سجل التدقيق</h2></div></section><section id="audit" class="box"></section></div>
+
+  <section class="split" id="globalOps">
+    <div>
+      <div class="section-head"><div><div class="eyebrow">INFRASTRUCTURE</div><h2>البنية الأساسية</h2></div></div>
+      <section id="infra" class="stack"></section>
+    </div>
+    <div>
+      <div class="section-head"><div><div class="eyebrow">BACKUPS</div><h2>النسخ الاحتياطية</h2></div></div>
+      <section id="backups" class="box"></section>
+
+      <div class="section-head compact"><div><div class="eyebrow">STORAGE</div><h2>Docker الرئيسي</h2></div></div>
+      <section id="dockerUsage" class="box"></section>
+    </div>
+  </section>
+</main>
+
+<div id="drawer" class="drawer hidden">
+  <div class="drawer-panel">
+    <button id="drawerClose" class="close">إغلاق ×</button>
+    <div id="drawerBody"></div>
+  </div>
+</div>
+
+<div id="projectBackupModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="projectBackupModalTitle">
+  <div class="modal-card">
+    <div class="eyebrow">CONFIRM PROJECT BACKUP</div>
+    <h2 id="projectBackupModalTitle">تأكيد النسخة الاحتياطية</h2>
+    <p id="projectBackupModalText" class="muted"></p>
+    <div class="confirm-id" id="projectBackupConfirmID"></div>
+    <label for="projectBackupConfirmInput">اكتب معرّف المشروع كما هو للتأكيد</label>
+    <input id="projectBackupConfirmInput" type="text" autocomplete="off" spellcheck="false">
+    <div class="modal-actions">
+      <button id="projectBackupCancelBtn">إلغاء</button>
+      <button id="projectBackupConfirmBtn" class="danger-action" disabled>إنشاء النسخة</button>
+    </div>
+  </div>
+</div>
+
+<footer>v0.20.1 · UI polish · Controlled project backup operations · Super Admin only · No production restore</footer>
+<script src="/app.js" defer></script>
+</body>
+</html>
