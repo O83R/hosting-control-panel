@@ -129,10 +129,10 @@ echo "TENANT RLS ISOLATION: PASS"
 echo "FAIL-CLOSED TENANT CONTEXT: PASS"
 
 roles_count="$(docker exec "$NAME" psql -U postgres -d hcp_test -Atc "SELECT count(*) FROM hcp.roles;")"
-permissions_count="$(docker exec "$NAME" psql -U postgres -d hcp_test -Atc "SELECT count(*) FROM hcp.permissions;")"
+permissions_count="$(docker exec "$NAME" psql -U postgres -d hcp_test -Atc "SELECT count(*) FROM hcp.permissions WHERE code IN ('platform.read','platform.manage','tenants.read','tenants.manage','nodes.read','nodes.manage','security.manage','audit.read','tenant.read','tenant.manage','sites.read','sites.manage','backups.read','backups.manage');")"
 mfa_active="$(docker exec "$NAME" psql -U postgres -d hcp_test -Atc "SELECT count(*) FROM hcp.mfa_factors WHERE status='active';")"
 [[ "$roles_count" == "9" ]] || { echo "STOP: expected 9 roles, got $roles_count" >&2; exit 1; }
-[[ "$permissions_count" == "14" ]] || { echo "STOP: expected 14 permissions, got $permissions_count" >&2; exit 1; }
+[[ "$permissions_count" == "14" ]] || { echo "STOP: Phase 02 permission baseline incomplete: got $permissions_count of 14" >&2; exit 1; }
 [[ "$mfa_active" == "1" ]] || { echo "STOP: MFA contract failed" >&2; exit 1; }
 
 commit="${GITHUB_SHA:-local}"
