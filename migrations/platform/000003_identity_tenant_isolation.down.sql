@@ -3,6 +3,10 @@ BEGIN;
 DELETE FROM hcp.schema_migrations
 WHERE version = 3 AND name = 'identity_tenant_isolation';
 
+DROP POLICY IF EXISTS tenants_scope_policy ON hcp.tenants;
+ALTER TABLE hcp.tenants NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE hcp.tenants DISABLE ROW LEVEL SECURITY;
+
 DROP TABLE IF EXISTS hcp.mfa_factors CASCADE;
 DROP TABLE IF EXISTS hcp.role_assignments CASCADE;
 DROP TABLE IF EXISTS hcp.role_permissions CASCADE;
