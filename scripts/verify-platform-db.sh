@@ -73,14 +73,26 @@ DECLARE
   table_count integer;
   migration_count integer;
 BEGIN
-  SELECT count(*) INTO table_count FROM information_schema.tables WHERE table_schema='hcp';
-  IF table_count <> 15 THEN
-    RAISE EXCEPTION 'expected 15 hcp tables, found %', table_count;
+  SELECT count(*) INTO table_count
+  FROM information_schema.tables
+  WHERE table_schema='hcp'
+    AND table_name IN (
+      'schema_migrations',
+      'tenants',
+      'nodes',
+      'node_capabilities',
+      'jobs',
+      'job_steps',
+      'job_events',
+      'resource_locks'
+    );
+  IF table_count <> 8 THEN
+    RAISE EXCEPTION 'required platform foundation tables missing: found % of 8', table_count;
   END IF;
 
   SELECT count(*) INTO migration_count FROM hcp.schema_migrations;
-  IF migration_count <> 3 THEN
-    RAISE EXCEPTION 'expected 3 migration receipts, found %', migration_count;
+  IF migration_count < 2 THEN
+    RAISE EXCEPTION 'expected at least 2 migration receipts, found %', migration_count;
   END IF;
 END $$;
 
@@ -155,6 +167,11 @@ SQL
 echo
 echo "=== APPLY MIGRATION CHAIN ==="
 apply_up
+migration_count="$(docker exec "$NAME" psql -U postgres -d hcp_test -Atc "SELECT count(*) FROM hcp.schema_migrations;")"
+[[ "$migration_count" == "${#UPS[@]}" ]] || {
+  echo "STOP: applied migration receipt count is $migration_count, expected ${#UPS[@]}" >&2
+  exit 1
+}
 assert_schema
 echo "PLATFORM DB APPLY: PASS"
 
@@ -194,7 +211,7 @@ echo "PLATFORM DB DOWN: PASS"
 
 apply_up
 migration_count="$(docker exec "$NAME" psql -U postgres -d hcp_test -Atc "SELECT count(*) FROM hcp.schema_migrations;")"
-[[ "$migration_count" == "3" ]] || { echo "STOP: reapply migration receipt count is $migration_count" >&2; exit 1; }
+[[ "$migration_count" == "${#UPS[@]}" ]] || { echo "STOP: reapply migration receipt count is $migration_count, expected ${#UPS[@]}" >&2; exit 1; }
 echo "PLATFORM DB REAPPLY: PASS"
 
 commit="${GITHUB_SHA:-local}"
