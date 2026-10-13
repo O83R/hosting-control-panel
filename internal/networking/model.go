@@ -138,8 +138,7 @@ func validateFQDN(value string) error {
 	if value == "" || value != strings.ToLower(value) || len(value) > 253 || !strings.Contains(value, ".") {
 		return errors.New("fqdn must be canonical lowercase hostname")
 	}
-	if strings.HasSuffix(value, ".") || strings.ContainsAny(value, "/:@?# 	
-") {
+	if strings.HasSuffix(value, ".") || strings.ContainsAny(value, "/:@?# \t\r\n") {
 		return errors.New("fqdn contains invalid characters")
 	}
 	labels := strings.Split(value, ".")
@@ -208,8 +207,7 @@ func (r ProxyRoute) Validate() error {
 		return errors.New("proxy route identity fields are required")
 	}
 	if !strings.HasPrefix(r.PathPrefix, "/") ||
-		strings.ContainsAny(r.PathPrefix, "?#
-") {
+		strings.ContainsAny(r.PathPrefix, "?#\r\n") {
 		return errors.New("proxy path prefix is invalid")
 	}
 	if r.TargetScheme != "http" && r.TargetScheme != "https" {
@@ -217,8 +215,7 @@ func (r ProxyRoute) Validate() error {
 	}
 	if strings.TrimSpace(r.TargetHost) == "" ||
 		strings.Contains(r.TargetHost, "://") ||
-		strings.ContainsAny(r.TargetHost, "/?# 	
-") {
+		strings.ContainsAny(r.TargetHost, "/?# \t\r\n") {
 		return errors.New("proxy target host is invalid")
 	}
 	if ip := net.ParseIP(strings.Trim(r.TargetHost, "[]")); ip == nil {
