@@ -164,6 +164,26 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  dns-ssl-adapters:
+    needs: source-and-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Fresh checkout
+        uses: actions/checkout@v4
+
+      - name: DNS and SSL provider adapter contract
+        run: bash scripts/verify-dns-ssl-adapters.sh
+
+      - name: Upload DNS/SSL adapter receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hcp-dns-ssl-receipt-${{ github.sha }}
+          path: .ci-out/dns-ssl-adapters-receipt.json
+          if-no-files-found: warn
+          retention-days: 14
+
   independent-verifier:
     needs: source-and-contract
     runs-on: ubuntu-latest
