@@ -144,6 +144,26 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  domains-proxy-routes:
+    needs: source-and-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Fresh checkout
+        uses: actions/checkout@v4
+
+      - name: Domains and proxy routes contract
+        run: bash scripts/verify-networking-db.sh
+
+      - name: Upload networking contract receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hcp-networking-receipt-${{ github.sha }}
+          path: .ci-out/networking-db-receipt.json
+          if-no-files-found: warn
+          retention-days: 14
+
   independent-verifier:
     needs: source-and-contract
     runs-on: ubuntu-latest
