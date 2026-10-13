@@ -124,6 +124,26 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  sites-adoption:
+    needs: source-and-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Fresh checkout
+        uses: actions/checkout@v4
+
+      - name: Sites and adoption contract
+        run: bash scripts/verify-sites-db.sh
+
+      - name: Upload sites/adoption receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hcp-sites-receipt-${{ github.sha }}
+          path: .ci-out/sites-db-receipt.json
+          if-no-files-found: warn
+          retention-days: 14
+
   independent-verifier:
     needs: source-and-contract
     runs-on: ubuntu-latest
