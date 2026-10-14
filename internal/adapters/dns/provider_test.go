@@ -42,11 +42,13 @@ func TestCloudflarePlansWithoutSecrets(t *testing.T) {
 	}
 }
 
-
 func TestCloudflareRejectsOutOfZonePlans(t *testing.T) {
 	binding := Binding{
-		ProviderType: "cloudflare", Mode: ModeManaged, ZoneName: "example.com",
-		ProviderZoneRef: "zone-123", CredentialRef: "secretref://cloudflare/tenant-1",
+		ProviderType:    "cloudflare",
+		Mode:            ModeManaged,
+		ZoneName:        "example.com",
+		ProviderZoneRef: "zone-123",
+		CredentialRef:   "secretref://cloudflare/tenant-1",
 	}
 	for _, name := range []string{"example.net", "app.example.net", "example.com.evil.test", "fooexample.com", "sub..example.com", "APP.EXAMPLE.COM"} {
 		record := Record{ProviderRecordRef: "record-456", Type: "A", Name: name, Content: "192.0.2.10", TTL: 300}
