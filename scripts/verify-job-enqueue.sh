@@ -168,7 +168,40 @@ cat "$TMP"/*.out > "$TMP/results.txt"
 [[ "$(cut -d '|' -f 1 "$TMP/results.txt" | sort -u | wc -l | tr -d ' ')" == "1" ]] || {
   echo "STOP: racing enqueues produced different job IDs" >&2; exit 1;
 }
-[[ "$(grep -c '|f$' "$TMP/results.txt")" == "1" ]] || {
+[[ "$(grep -c '|false "$TMP/results.txt")" == "1" ]] || {
+  echo "STOP: expected exactly one insert winner" >&2; exit 1;
+}
+[[ "$(grep -c '|true "$TMP/results.txt")" == "7" ]] || {
+  echo "STOP: expected exactly seven idempotent replays" >&2; exit 1;
+}
+count="$(docker exec "$NAME" psql -U postgres -d "$DB" -Atqc "
+SELECT count(*) FROM hcp.jobs
+WHERE tenant_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+  AND idempotency_key='race-key';")"
+[[ "$count" == "1" ]] || { echo "STOP: durable uniqueness race failed" >&2; exit 1; }
+echo "CONCURRENT ENQUEUE (8 CALLERS, 1 INSERT, 7 REPLAYS): PASS"
+ "$TMP/results.txt")" == "1" ]] || {
+  echo "STOP: expected exactly one insert winner" >&2; exit 1;
+}
+[[ "$(grep -c '|t$' "$TMP/results.txt")" == "7" ]] || {
+  echo "STOP: expected exactly seven idempotent replays" >&2; exit 1;
+}
+count="$(docker exec "$NAME" psql -U postgres -d "$DB" -Atqc "
+SELECT count(*) FROM hcp.jobs
+WHERE tenant_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+  AND idempotency_key='race-key';")"
+[[ "$count" == "1" ]] || { echo "STOP: durable uniqueness race failed" >&2; exit 1; }
+echo "CONCURRENT ENQUEUE (8 CALLERS, 1 INSERT, 7 REPLAYS): PASS"
+ "$TMP/results.txt")" == "7" ]] || {
+  echo "STOP: expected exactly seven idempotent replays" >&2; exit 1;
+}
+count="$(docker exec "$NAME" psql -U postgres -d "$DB" -Atqc "
+SELECT count(*) FROM hcp.jobs
+WHERE tenant_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+  AND idempotency_key='race-key';")"
+[[ "$count" == "1" ]] || { echo "STOP: durable uniqueness race failed" >&2; exit 1; }
+echo "CONCURRENT ENQUEUE (8 CALLERS, 1 INSERT, 7 REPLAYS): PASS"
+ "$TMP/results.txt")" == "1" ]] || {
   echo "STOP: expected exactly one insert winner" >&2; exit 1;
 }
 [[ "$(grep -c '|t$' "$TMP/results.txt")" == "7" ]] || {
