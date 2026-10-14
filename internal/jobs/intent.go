@@ -80,7 +80,7 @@ func Prepare(in Intent) (Plan, error) {
 		return Plan{}, fmt.Errorf("%w: unable to canonicalize", ErrInvalidIntent)
 	}
 	digest := sha256.Sum256(canonical)
-	return       Plan{
+	return Plan{
 		Intent:      in,
 		Fingerprint: hex.EncodeToString(digest[:]),
 		Steps:       []string{"preflight", "synthetic-agent-ping", "verify", "receipt"},
