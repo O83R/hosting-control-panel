@@ -161,6 +161,11 @@ SQL
 
 echo "TENANT RLS AND FAIL-CLOSED NEGATIVE TESTS: PASS"
 
+# Uses only the disposable container and a restricted CI tenant role.
+bash scripts/verify-job-enqueue.sh "$NAME"
+
+docker exec -i "$NAME" psql -U postgres -d hcp_test -v ON_ERROR_STOP=1 \
+  < migrations/platform/000009_tenant_ping_enqueue.down.sql >/dev/null
 docker exec -i "$NAME" psql -U postgres -d hcp_test -v ON_ERROR_STOP=1 \
   < migrations/platform/000008_job_orchestrator_security.down.sql >/dev/null
 removed="$(docker exec "$NAME" psql -U postgres -d hcp_test -Atc "
@@ -169,11 +174,17 @@ WHERE table_schema='hcp' AND table_name='jobs' AND column_name='intent_fingerpri
 [[ "$removed" == "0" ]] || { echo "STOP: down migration did not remove fingerprint" >&2; exit 1; }
 docker exec -i "$NAME" psql -U postgres -d hcp_test -v ON_ERROR_STOP=1 \
   < migrations/platform/000008_job_orchestrator_security.up.sql >/dev/null
+docker exec -i "$NAME" psql -U postgres -d hcp_test -v ON_ERROR_STOP=1 \
+  < migrations/platform/000009_tenant_ping_enqueue.up.sql >/dev/null
 restored="$(docker exec "$NAME" psql -U postgres -d hcp_test -Atc "
 SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
 WHERE n.nspname='hcp' AND c.relname IN ('jobs','job_steps','job_events','resource_locks')
   AND c.relrowsecurity AND c.relforcerowsecurity;")"
 [[ "$restored" == "4" ]] || { echo "STOP: reapply RLS failure" >&2; exit 1; }
+reapplied="$(docker exec "$NAME" psql -U postgres -d hcp_test -Atqc "
+SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+WHERE n.nspname='hcp' AND p.proname='enqueue_tenant_ping';")"
+[[ "$reapplied" == "1" ]] || { echo "STOP: enqueue function missing after reapply" >&2; exit 1; }
 echo "UP/DOWN/REAPPLY: PASS"
 
 python3 - "$OUT/job-orchestrator-receipt.json" "${GITHUB_SHA:-local}" "${GITHUB_RUN_ID:-local}" <<'PY'
@@ -195,7 +206,10 @@ receipt = {
     "cross_tenant_write_rejected": "PASS",
     "missing_tenant_rejected": "PASS",
     "platform_guc_bypass_rejected": "PASS",
-    "migration_down_reapply": "PASS"
+    "migration_down_reapply": "PASS",
+    "tenant_atomic_enqueue": "PASS",
+    "idempotency_conflict": "PASS",
+    "concurrent_replay": "PASS"
   },
   "verified_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
 }
