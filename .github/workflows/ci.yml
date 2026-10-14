@@ -203,3 +203,29 @@ jobs:
           path: .ci-out/verifier-receipt.json
           if-no-files-found: warn
           retention-days: 14
+
+  job-orchestrator-contract:
+    needs: source-and-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Fresh checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Isolated job security and intent contract
+        run: bash scripts/verify-job-orchestrator.sh
+
+      - name: Upload Phase 08 job contract receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hcp-jobs-receipt-${{ github.sha }}
+          path: .ci-out/job-orchestrator-receipt.json
+          if-no-files-found: warn
+          retention-days: 14
