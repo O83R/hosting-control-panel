@@ -8,13 +8,13 @@ import (
 
 func validIntent() Intent {
 	return Intent{
-		TenantID: "tenant-a",
-		Kind: "agent.ping",
-		ResourceType: "node",
-		ResourceID: "node-1",
-		RequestedBy: "tester",
+		TenantID:       "tenant-a",
+		Kind:           "agent.ping",
+		ResourceType:   "node",
+		ResourceID:     "node-1",
+		RequestedBy:    "tester",
 		IdempotencyKey: "once-only",
-		Input: json.RawMessage(`{}`),
+		Input:          json.RawMessage(`{}`),
 	}
 }
 
