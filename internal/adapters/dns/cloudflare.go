@@ -24,6 +24,9 @@ func (Cloudflare) PlanUpsert(binding Binding, record Record) (MutationPlan, erro
 	if err := validateRecord(record); err != nil {
 		return MutationPlan{}, err
 	}
+	if err := validateRecordZone(binding.ZoneName, record.Name); err != nil {
+		return MutationPlan{}, err
+	}
 
 	payload, err := json.Marshal(map[string]any{
 		"type":    record.Type,
@@ -68,6 +71,9 @@ func (Cloudflare) PlanDelete(binding Binding, record Record) (MutationPlan, erro
 	if strings.TrimSpace(record.ProviderRecordRef) == "" {
 		return MutationPlan{}, errors.New("provider record reference is required for delete")
 	}
+	if err := validateRecordZone(binding.ZoneName, record.Name); err != nil {
+		return MutationPlan{}, err
+	}
 	return MutationPlan{
 		Provider: "cloudflare",
 		Action:   "dns.record.delete",
@@ -75,4 +81,20 @@ func (Cloudflare) PlanDelete(binding Binding, record Record) (MutationPlan, erro
 		Path: "/client/v4/zones/" + url.PathEscape(binding.ProviderZoneRef) +
 			"/dns_records/" + url.PathEscape(record.ProviderRecordRef),
 	}, nil
+}
+
+// validateRecordZone keeps planned provider mutations inside the configured zone.
+// The executor must additionally authorize the provider record ID against the
+// tenant-owned database record immediately before an actual provider request.
+func validateRecordZone(zoneName, recordName string) error {
+	zone := strings.TrimSpace(zoneName)
+	name := strings.TrimSpace(recordName)
+	if zone == "" || name == "" ||
+		zone != strings.ToLower(zone) || name != strings.ToLower(name) ||
+		strings.HasSuffix(zone, ".") || strings.HasSuffix(name, ".") ||
+		strings.HasPrefix(name, ".") || strings.Contains(name, "..") ||
+		(name != zone && !strings.HasSuffix(name, "."+zone)) {
+		return errors.New("dns record name is outside the canonical provider zone")
+	}
+	return nil
 }
