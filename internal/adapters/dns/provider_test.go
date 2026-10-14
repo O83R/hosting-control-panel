@@ -42,6 +42,29 @@ func TestCloudflarePlansWithoutSecrets(t *testing.T) {
 	}
 }
 
+
+func TestCloudflareRejectsOutOfZonePlans(t *testing.T) {
+	binding := Binding{
+		ProviderType: "cloudflare", Mode: ModeManaged, ZoneName: "example.com",
+		ProviderZoneRef: "zone-123", CredentialRef: "secretref://cloudflare/tenant-1",
+	}
+	for _, name := range []string{"example.net", "app.example.net", "example.com.evil.test", "fooexample.com", "sub..example.com", "APP.EXAMPLE.COM"} {
+		record := Record{ProviderRecordRef: "record-456", Type: "A", Name: name, Content: "192.0.2.10", TTL: 300}
+		if _, err := (Cloudflare{}).PlanUpsert(binding, record); err == nil {
+			t.Errorf("upsert unexpectedly allowed record %q outside canonical zone", name)
+		}
+		if _, err := (Cloudflare{}).PlanDelete(binding, record); err == nil {
+			t.Errorf("delete unexpectedly allowed record %q outside canonical zone", name)
+		}
+	}
+	for _, name := range []string{"example.com", "app.example.com", "_acme-challenge.example.com"} {
+		record := Record{Type: "TXT", Name: name, Content: "challenge", TTL: 300}
+		if _, err := (Cloudflare{}).PlanUpsert(binding, record); err != nil {
+			t.Errorf("valid in-zone record %q rejected: %v", name, err)
+		}
+	}
+}
+
 func TestExternalProviderIsReadOnly(t *testing.T) {
 	_, err := (ExternalReadOnly{}).PlanUpsert(Binding{}, Record{})
 	if !errors.Is(err, ErrReadOnly) {
