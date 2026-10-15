@@ -29,9 +29,37 @@ A trusted server must establish an authenticated tenant identity and DB
 transaction scope before the adapter may be used. PostgreSQL custom GUC
 values alone are **not** proof of user identity.
 
+## Development slice 3 — Fenced resource leases (isolated)
+
+- Migration `000010` extends the existing `hcp.resource_locks` rather
+  than adding a conflicting source of truth.
+- A persistent positive `fencing_token` increases at every expired/released
+  lease takeover, including by another job of the same tenant. The job
+  foreign key changes to `ON DELETE RESTRICT` to retain fence history.
+- `claim_tenant_ping_lease` atomically claims a **queued, typed, synthetic**
+  `agent.ping` job, acquires its resource fence and transitions it to
+  `running`. A contending job remains queued.
+- `renew_tenant_ping_lease` requires the current job, fence, non-expired
+  lease and running state.
+- `release_tenant_ping_lease` requires the matching fence, a still-active
+  lease and an already-terminal job. It expires but never deletes the lock.
+- `reconcile_expired_tenant_ping_lease` marks an expired, still-owned
+  running job failed, with `LEASE_EXPIRED`. An expired holder is also
+  marked failed transactionally during successful takeover.
+- All lease functions are `SECURITY INVOKER`, default `PUBLIC` execution
+  revoked. No deployment role grants, scheduling or network executor.
+- The ephemeral PostgreSQL verifier simulates expiry without sleeping,
+  checks cross-tenant denial and stale fences, and races two independent
+  worker sessions against one resource.
+
+**Fencing must be validated at the actual downstream side-effect boundary
+before any future mutating job action is enabled.** This initial slice
+contains no such downstream integration or external calls; it proves only
+database metadata coordination.
+
 ## Not implemented
 
-A job claim/lease worker, provider adapter execution, lease renewal and recovery, scheduling, retries, approvals, deployment, or production integration are **not** present. Passing the current tests does not prove those capabilities.
+A deployed worker, provider adapter execution, scheduling, bounded retries, approvals, deployment, or production integration are **not** present. Passing the current tests does not prove those capabilities.
 
 ## Security assessment
 
@@ -40,7 +68,7 @@ The migration deliberately refuses the generic `platform` context for normal job
 ## Next verified development slices
 
 1. Review the trusted DB principal/authenticated tenant context (enqueue entrypoint has no production grant).
-2. Resource-aware claim/lease/fencing semantics with crash/restart simulation.
+2. Independently review claim/lease fencing semantics and crash recovery under load.
 3. Audit-safe step transitions and immutable, redacted receipts.
 4. Restricted synthetic worker and independent concurrency tests.
 
