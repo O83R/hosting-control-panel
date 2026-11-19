@@ -1,0 +1,16 @@
+# Never commit runtime or sensitive material.
+monitoring/.env
+**/.env.local
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*secret*
+**/*token*
+audit-output/
+backups/
+logs/
+*.dump
+*.sql
+*.sqlite
+*.sqlite3
