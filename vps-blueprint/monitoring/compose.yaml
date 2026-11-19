@@ -1,0 +1,38 @@
+# New VPS ONLY. No source secrets or content.
+name: vps-shared
+services:
+  nginx-proxy-manager:
+    image: ${NPM_IMAGE:?Select reviewed NPM_IMAGE in .env}
+    container_name: nginx-proxy-manager
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "127.0.0.1:81:81"
+    volumes:
+      - /srv/vps-shared/npm/data:/data
+      - /srv/vps-shared/npm/letsencrypt:/etc/letsencrypt
+    networks:
+      - proxy_net
+      - monitoring_net
+    security_opt:
+      - no-new-privileges:true
+  uptime-kuma:
+    image: ${KUMA_IMAGE:?Select reviewed KUMA_IMAGE in .env}
+    container_name: uptime-kuma
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - /srv/vps-shared/kuma/data:/app/data
+    networks:
+      - monitoring_net
+    security_opt:
+      - no-new-privileges:true
+networks:
+  proxy_net:
+    name: proxy_net
+    driver: bridge
+  monitoring_net:
+    name: monitoring_net
+    driver: bridge
